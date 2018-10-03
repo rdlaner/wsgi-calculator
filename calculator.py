@@ -40,45 +40,98 @@ To submit your homework:
 
 
 """
+from functools import reduce
+
+DEFAULT = "No value set"
+
+
+def index():
+    """ Home page for the calculator """
+    return ("<h1>Welcome to the WSGI-Calculator</h1>"
+            "This calculator supports the following operations:"
+            "<pre>    Add</pre>"
+            "<pre>    Subtract</pre>"
+            "<pre>    Multiply</pre>"
+            "<pre>    Divide<BR></pre>"
+            "Each operation can be used by navigating to that location from this home page."
+            "The operands for each operation must be supplied as additional fields in the uri.<BR>"
+            "For example:<BR>"
+            "<pre>    [this page]/multiply/3/5 => 15</pre>"
+            "<pre>    [this page]/add/23/42 => 65</pre>")
 
 
 def add(*args):
     """ Returns a STRING with the sum of the arguments """
+    return str(sum(map(int, args)))
 
-    # TODO: Fill sum with the correct value, based on the
-    # args provided.
-    sum = "0"
 
-    return sum
+def divide(*args):
+    """ Returns a STRING with the quotient of the arguments """
+    return str(reduce(lambda a, b: a / b, map(int, args)))
 
-# TODO: Add functions for handling more arithmetic operations.
+
+def multiply(*args):
+    """ Returns a STRING with the product of the arguments """
+    return str(reduce(lambda a, b: a * b, map(int, args)))
+
+
+def subtract(*args):
+    """ Returns a STRING with the difference of the arguments """
+    return str(reduce(lambda a, b: a - b, map(int, args)))
+
 
 def resolve_path(path):
     """
     Should return two values: a callable and an iterable of
     arguments.
     """
+    operations = {
+        "": index,
+        "add": add,
+        "subtract": subtract,
+        "multiply": multiply,
+        "divide": divide
+    }
 
-    # TODO: Provide correct values for func and args. The
-    # examples provide the correct *syntax*, but you should
-    # determine the actual values of func and args using the
-    # path.
-    func = add
-    args = ['25', '32']
+    path = path.strip("/").split("/")
+    oper = path[0]
+    args = path[1:]
+
+    try:
+        func = operations[oper]
+    except KeyError:
+        raise NameError
 
     return func, args
 
+
 def application(environ, start_response):
-    # TODO: Your application code from the book database
-    # work here as well! Remember that your application must
-    # invoke start_response(status, headers) and also return
-    # the body of the response in BYTE encoding.
-    #
-    # TODO (bonus): Add error handling for a user attempting
-    # to divide by zero.
-    pass
+    """ WSGI-Calculator main application """
+    try:
+        func, args = resolve_path(environ.get("PATH_INFO", DEFAULT))
+        body = func(*args)
+    except NameError:
+        status = "404 Not Found"
+        body = "<h1>Not Found</h1>"
+    except (TypeError, ValueError):
+        status = "400 Bad Request"
+        body = "<h1>Bad Request: Invalid operand</h1>"
+    except ZeroDivisionError:
+        status = "400 Bad Request"
+        body = "<h1>Bad Request: Cannot divide by zero!</h1>"
+    except Exception:
+        status = "500 Internal Server Error"
+        body = "<h1>Internal Server Error</h1>"
+    else:
+        status = "200 OK"
+    finally:
+        headers = [("Content-type", "text/html")]
+        start_response(status, headers)
+
+    return [f"<h1>{body}</h1>".encode("utf-8")]
+
 
 if __name__ == '__main__':
-    # TODO: Insert the same boilerplate wsgiref simple
-    # server creation that you used in the book database.
-    pass
+    from wsgiref.simple_server import make_server
+    server = make_server('localhost', 8080, application)
+    server.serve_forever()
